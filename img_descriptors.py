@@ -1,6 +1,9 @@
 import cv2
 import numpy as np
 import mahotas
+import pywt 
+from skimage.feature import greycomatrix as gc
+from skimage.feature import greycoprops as gp
 
 def img2feature(img,size = (32,32)):
     return cv2.resize(img,size).flatten().tolist()
@@ -11,13 +14,13 @@ def img2hist(img,bins = (16,7,7)):
     cv2.normalize(hist,hist)
     return hist.flatten().tolist()
 
-def img2modihist(img,bins = (16,7,7)):
+def img2modihist(img,bins = (11,8,9)):
     hsv = cv2.cvtColor(img,cv2.COLOR_BGR2HSV)
     features = []
     (h,w) = hsv.shape[:2]
     (cX,cY) = (int(w*0.5),int(h*0.5))
     segments = [(0, cX, 0, cY), (cX, w, 0, cY), (cX, w, cY, h),(0, cX, cY, h)]
-    (axesX, axesY) = (int(w * 25/128), int(h * 25/128) )
+    (axesX, axesY) = (int(w/5), int(h/5) )
     ellipMask = np.zeros(hsv.shape[:2], dtype = "uint8")
     cv2.ellipse(ellipMask, (cX, cY), (axesX, axesY), 0, 0, 360, 255, -1)
     for (startX, endX, startY, endY) in segments:
@@ -51,3 +54,38 @@ def img2modihist2(img,bins = (16,7,7)):
 def img2shape(img,radius):
     img_gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
     return mahotas.features.zernike_moments(img_gray,radius)
+
+def w2d(img, mode='haar', level=1):
+    imArray = cv2.imread(img)
+    #Datatype conversions
+    #convert to grayscale
+    imArray = cv2.cvtColor( imArray,cv2.COLOR_BGR2GRAY )
+    #convert to float
+    imArray =  np.float32(imArray)   
+    imArray /= 255;
+    # compute coefficients 
+    coeffs=pywt.wavedec2(imArray, mode, level=level)
+
+    #Process Coefficients
+    coeffs_H=list(coeffs)  
+    coeffs_H[0] *= 0;  
+
+    # reconstruction
+    imArray_H=pywt.waverec2(coeffs_H, mode);
+    imArray_H *= 255;
+    imArray_H =  np.uint8(imArray_H)
+    return imArray_H
+
+def texcal(img,modihist):
+    grey = gc(img,[1],[0, np.pi/8, np.pi/4, 3*np.pi/8, np.pi/2, 5*np.pi/8, 3*np.pi/4, 7*np.pi/8],levels = 256, normed = True)
+    contrast = gp(grey,'contrast')
+    energy = gp(grey,'energy')
+    correlation = gp(grey,'correlation')
+    (h,w) = img.shape[:2]
+    for x in range(8):
+        modihist.append(contrast[0][x]/10000)
+    for x in range(8):
+        modihist.append(energy[0][x]*10)
+    for x in range(8):
+        modihist.append(correlation[0][x])  
+                      
